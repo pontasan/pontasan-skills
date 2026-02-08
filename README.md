@@ -15,6 +15,10 @@ An AI image generation skill powered by the Google Gemini API. Automatically gen
 - Two generation modes: **fast** (default) and **quality** (use when high quality is truly needed)
 - Automatically respects API rate limits (RPM / TPM / RPD)
 
+#### Requirements
+
+- Node.js (developed on v24, but likely works on other versions)
+
 #### Setup
 
 1. Get a [Google Gemini API key](https://aistudio.google.com/apikey)
