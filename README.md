@@ -2,6 +2,16 @@
 
 A collection of custom skills for Claude Code.
 
+## Demo
+
+Here's an example of Claude Code automatically generating images while building a cafe landing page.
+
+![Claude Code auto-generating images using the pontasan-genimg skill](images/image1.jpg)
+
+The finished website built with the generated images:
+
+![Completed cafe landing page with AI-generated images](images/image2.jpg)
+
 ## Skills
 
 ### pontasan-genimg
