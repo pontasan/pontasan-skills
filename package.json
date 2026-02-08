@@ -1,0 +1,7 @@
+{
+  "name": "pontasan-skills",
+  "version": "1.0.0",
+  "description": "A collection of custom skills for Claude Code",
+  "license": "ISC",
+  "private": true
+}
