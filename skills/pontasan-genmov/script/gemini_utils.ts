@@ -9,7 +9,6 @@ import { AiModel, Context, newContext, newRequestHistory, RequestHistory, Spec }
 const execFileAsync = promisify(execFile);
 
 export namespace GeminiUtils {
-    const SAFETY_FACTOR = 0.95 // Safety margin
     const LOG_DIR = '.logs'
     const POLL_INTERVAL_MS = 10_000 // 10 seconds
     const POLL_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
@@ -17,19 +16,25 @@ export namespace GeminiUtils {
 
     let ffmpegAvailable: boolean | undefined = undefined
 
-    export function getVideoModel(mode: 'fast' | 'quality'): AiModel {
+    export function getVideoModel(mode: 'fast' | 'quality' | 'ultra'): AiModel {
         switch (mode) {
             case 'fast': return {
-                model: 'veo-3.1-fast-generate-preview',
-                rpm: Math.trunc(5 * SAFETY_FACTOR),
-                tpm: Math.trunc(100 * 1000 * SAFETY_FACTOR),
-                rpd: Math.trunc(50 * SAFETY_FACTOR)
+                model: 'veo-2.0-generate-001',
+                rpm: 2,
+                rpd: 50,
+                durationSeconds: [5, 6, 7, 8]
             }
             case 'quality': return {
+                model: 'veo-3.1-fast-generate-preview',
+                rpm: 5,
+                rpd: 10,
+                durationSeconds: [4, 6, 8]
+            }
+            case 'ultra': return {
                 model: 'veo-3.1-generate-preview',
-                rpm: Math.trunc(5 * SAFETY_FACTOR),
-                tpm: Math.trunc(100 * 1000 * SAFETY_FACTOR),
-                rpd: Math.trunc(25 * SAFETY_FACTOR)
+                rpm: 2,
+                rpd: 10,
+                durationSeconds: [4, 6, 8]
             }
         }
     }
@@ -114,7 +119,6 @@ export namespace GeminiUtils {
             const currentTime = Date.now()
             let rpmCount = 0
             let rpdCount = 0
-            let tpmCount = 0
             for (const log of context.requestLogs) {
                 if (log.aiModel !== context.aiModel.model) {
                     continue
@@ -122,19 +126,15 @@ export namespace GeminiUtils {
 
                 if (currentTime - log.time <= ONE_MINUTE_MS) {
                     rpmCount++
-
-                    const tokenSize = (log.totalTokenCount !== undefined ? log.totalTokenCount : log.promptLength)
-                    tpmCount += tokenSize
                 }
                 if (currentTime - log.time <= ONE_DAY_MS) {
                     rpdCount++
                 }
             }
 
-            // RPM/RPD/TPM check
+            // RPM/RPD check
             let rpmExceeded = false
             let rpdExceeded = false
-            let tpmExceeded = false
             if (rpmCount >= context.aiModel.rpm) {
                 rpmExceeded = true
                 console.warn(`RPM limit exceeded: ${rpmCount} >= ${context.aiModel.rpm}`)
@@ -143,14 +143,10 @@ export namespace GeminiUtils {
                 rpdExceeded = true
                 console.warn(`RPD limit exceeded: ${rpdCount} >= ${context.aiModel.rpd}`)
             }
-            if (tpmCount >= context.aiModel.tpm) {
-                tpmExceeded = true
-                console.warn(`TPM limit exceeded: ${tpmCount} >= ${context.aiModel.tpm}`)
-            }
 
-            console.warn(`RPM remaining=${context.aiModel.rpm - rpmCount} / RPD remaining=${context.aiModel.rpd - rpdCount} / TPM remaining=${context.aiModel.tpm - tpmCount}`)
+            console.warn(`RPM remaining=${context.aiModel.rpm - rpmCount} / RPD remaining=${context.aiModel.rpd - rpdCount}`)
 
-            if (rpmExceeded || rpdExceeded || tpmExceeded) {
+            if (rpmExceeded || rpdExceeded) {
                 console.warn('Waiting for rate limit reset...')
                 await setTimeout(ONE_MINUTE_MS)
                 continue
@@ -196,7 +192,7 @@ export namespace GeminiUtils {
             model: context.aiModel.model,
             config: {
                 aspectRatio: spec.aspectRatio ?? "16:9",
-                durationSeconds: spec.durationSeconds ?? 4
+                durationSeconds: spec.durationSeconds ?? context.aiModel.durationSeconds[0]
             }
         }
 
@@ -284,25 +280,42 @@ export namespace GeminiUtils {
                     throw new Error("Video URI is missing in the response")
                 }
 
-                // Download video to output path
                 const filePath = spec.filePath!
                 const dir = path.dirname(filePath)
                 await fs.mkdir(dir, { recursive: true })
 
-                console.warn(`Downloading video to: ${filePath}`)
-                await ai.files.download({
-                    file: generatedVideos[0],
-                    downloadPath: filePath
-                })
+                const isGif = spec.mimeType?.toLowerCase() === 'image/gif'
 
-                // Strip audio if not requested
-                if (!spec.generateAudio) {
-                    await stripAudio(filePath)
+                if (isGif) {
+                    // Download MP4 to temp, then convert to GIF
+                    const tmpMp4 = filePath + '.tmp.mp4'
+                    console.warn(`Downloading video to temp: ${tmpMp4}`)
+                    await ai.files.download({
+                        file: generatedVideos[0],
+                        downloadPath: tmpMp4
+                    })
+                    await convertToGif(tmpMp4, filePath)
+                } else {
+                    // Download MP4 directly
+                    console.warn(`Downloading video to: ${filePath}`)
+                    await ai.files.download({
+                        file: generatedVideos[0],
+                        downloadPath: filePath
+                    })
+                    // Strip audio if not requested
+                    if (!spec.generateAudio) {
+                        await stripAudio(filePath)
+                    }
                 }
 
                 return filePath
-            } catch (e) {
+            } catch (e: any) {
                 console.error(e)
+                // Do not retry on client errors (4xx) except 429 (rate limit)
+                const status = e?.status ?? e?.code
+                if (typeof status === 'number' && status >= 400 && status < 500 && status !== 429) {
+                    throw e
+                }
                 if (i === RETRY_LIMIT - 1) {
                     throw new Error(`Failed to generate video after ${RETRY_LIMIT} attempts`)
                 }
@@ -313,16 +326,42 @@ export namespace GeminiUtils {
         throw new Error("Failed to generate video after multiple attempts")
     }
 
-    async function stripAudio(filePath: string) {
-        // Check if ffmpeg is available (cached)
-        if (ffmpegAvailable === undefined) {
-            try {
-                await execFileAsync('ffmpeg', ['-version'])
-                ffmpegAvailable = true
-            } catch {
-                ffmpegAvailable = false
-            }
+    async function convertToGif(srcMp4: string, destGif: string) {
+        await ensureFfmpeg()
+        if (!ffmpegAvailable) {
+            // Cannot convert without ffmpeg, copy MP4 as-is
+            console.warn('ffmpeg not found, skipping GIF conversion. Output will be MP4.')
+            await fs.rename(srcMp4, destGif)
+            return
         }
+
+        try {
+            console.warn(`Converting MP4 to GIF...`)
+            await execFileAsync('ffmpeg', [
+                '-i', srcMp4,
+                '-vf', 'fps=10,scale=480:-1:flags=lanczos',
+                '-y', destGif
+            ])
+            await fs.unlink(srcMp4)
+            console.warn(`GIF conversion completed`)
+        } catch (e) {
+            console.warn(`Failed to convert to GIF, keeping MP4: ${e}`)
+            await fs.rename(srcMp4, destGif)
+        }
+    }
+
+    async function ensureFfmpeg() {
+        if (ffmpegAvailable !== undefined) return
+        try {
+            await execFileAsync('ffmpeg', ['-version'])
+            ffmpegAvailable = true
+        } catch {
+            ffmpegAvailable = false
+        }
+    }
+
+    async function stripAudio(filePath: string) {
+        await ensureFfmpeg()
         if (!ffmpegAvailable) {
             console.warn('ffmpeg not found, skipping audio removal. Install ffmpeg to enable automatic audio stripping.')
             return

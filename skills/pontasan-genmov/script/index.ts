@@ -31,8 +31,22 @@ async function main() {
             throw new Error("mode is missing in VIDEO_SPEC_JSON")
         }
 
-        if (spec.mode !== 'fast' && spec.mode !== 'quality') {
-            throw new Error("mode must be 'fast' or 'quality'")
+        if (spec.mode !== 'fast' && spec.mode !== 'quality' && spec.mode !== 'ultra') {
+            throw new Error("mode must be 'fast', 'quality', or 'ultra'")
+        }
+
+        if (spec.mimeType !== undefined && spec.mimeType !== 'video/mp4' && spec.mimeType !== 'image/gif') {
+            throw new Error("mimeType must be 'video/mp4' or 'image/gif'")
+        }
+
+        if (spec.aspectRatio !== undefined && spec.aspectRatio !== '16:9' && spec.aspectRatio !== '9:16') {
+            throw new Error("aspectRatio must be '16:9' or '9:16'")
+        }
+
+        // Validate durationSeconds against the model's allowed values
+        const aiModel = GeminiUtils.getVideoModel(spec.mode)
+        if (spec.durationSeconds !== undefined && !aiModel.durationSeconds.includes(spec.durationSeconds)) {
+            throw new Error(`durationSeconds must be one of [${aiModel.durationSeconds.join(', ')}] for mode '${spec.mode}'`)
         }
 
         // Initialize

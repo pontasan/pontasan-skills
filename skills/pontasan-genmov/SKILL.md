@@ -1,35 +1,38 @@
 ---
 name: pontasan-genmov
-description: AI video generation skill using Gemini Veo. Use this skill whenever you need to generate video content (MP4) from text prompts or images. Supports text-to-video and image-to-video generation.
+description: AI video generation skill using Gemini Veo. Generates video (MP4/GIF) from text prompts or images. Ideal for creating animated versions of static images, as well as generating videos from text descriptions.
 ---
 
 ## Usage
 
-Based on the prompt content, determine the appropriate video to generate and run the following script.
-The script generates a video according to your instruction (<VIDEO_SPEC_JSON>) and writes the generated video file path to standard output.
-Retrieve the video file path from standard output and use it as part of your task.
-.ts files can be executed directly by Node.js, so TypeScript compilation is not required.
+Run the following script to generate a video. The generated file path is written to stdout.
 
 ```bash
 # Set timeout to 600000ms (10 minutes) as video generation can take a long time
 npm --prefix .claude/skills/pontasan-genmov/script run generate -- <VIDEO_SPEC_JSON>
 ```
 
-## <VIDEO_SPEC_JSON> Description
+## VIDEO_SPEC_JSON
 
-VIDEO_SPEC_JSON must be a JSON array with the following fields:
+JSON array format:
 
 [{
-"filePath": "The expected output video file path (must be an absolute path, e.g. /path/to/output.mp4)",
-"prompt": "The text prompt describing the video to generate (optional if imagePath is provided)",
-"imagePath": "The absolute path to an input image for image-to-video generation (optional if prompt is provided)",
-"mode": "fast or quality. fast: high speed generation (veo-3.1-fast). quality: slower but higher quality (veo-3.1). quality has strict usage limits, so use it only when high quality is truly needed. Default to fast in most cases.",
-"mimeType": "The output MIME type (currently only video/mp4 is supported, defaults to video/mp4)",
-"aspectRatio": "The aspect ratio of the video: '16:9' (landscape, default) or '9:16' (portrait)",
-"durationSeconds": "Duration of the video in seconds. Supported values: 4, 6, or 8. Defaults to 4. To minimize file size, use 4 unless the user explicitly requests a longer duration.",
-"generateAudio": "Whether to generate audio along with the video. Defaults to false. Only set to true when audio is explicitly required by the user. Keeping audio off reduces file size."
+"filePath": "Absolute output path (.mp4 or .gif)",
+"prompt": "Text prompt (optional if imagePath provided)",
+"imagePath": "Absolute path to input image (optional if prompt provided)",
+"mode": "fast | quality | ultra",
+"mimeType": "video/mp4 | image/gif",
+"aspectRatio": "16:9 | 9:16",
+"durationSeconds": "Number (valid values depend on mode)",
+"generateAudio": "Boolean"
 }]
 
+## Rules
+
 - Either `prompt` or `imagePath` (or both) must be provided.
-- When both `prompt` and `imagePath` are provided, the image is used as a starting frame and the prompt describes the desired motion/action.
-- **Audio is off by default.** Do not enable `generateAudio` unless the user explicitly requests audio or sound in the video.
+- When both are provided, the image is the starting frame and the prompt describes the motion.
+- **mode**: Always default to `fast`. Use `quality` or `ultra` only when explicitly requested.
+- **mimeType**: Defaults to `video/mp4`. Use `image/gif` only when explicitly needed.
+- **aspectRatio**: Defaults to `16:9`.
+- **durationSeconds**: Allowed values differ by mode. fast=[5,6,7,8], quality/ultra=[4,6,8]. Defaults to the shortest (fast=5, quality/ultra=4). Always use the shortest unless explicitly requested longer. If a requested value is unavailable, use the nearest valid one.
+- **generateAudio**: Defaults to `false`. Only enable when audio is explicitly requested.

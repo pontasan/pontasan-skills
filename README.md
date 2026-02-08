@@ -40,6 +40,38 @@ cd skills/pontasan-genimg/script
 npm install
 ```
 
+### pontasan-genmov
+
+An AI video generation skill powered by Google Gemini Veo. Generates video (MP4/GIF) from text prompts or images. Ideal for creating animated versions of static images, as well as generating videos from text descriptions.
+
+![Video generated from a static image using the pontasan-genmov skill](images/image3.gif)
+
+#### Features
+
+- Generates videos using Google Gemini Veo API
+- Supports text-to-video and image-to-video generation
+- Three generation modes: **fast** (default, veo-2.0), **quality** (veo-3.1-fast), and **ultra** (veo-3.1)
+- Output formats: MP4 and GIF (requires ffmpeg for GIF conversion)
+- Optional audio generation (off by default to reduce file size)
+- Automatic audio stripping via ffmpeg (graceful degradation if ffmpeg is not installed)
+- Automatically respects API rate limits (RPM / RPD)
+
+#### Requirements
+
+- Node.js (developed on v24, but likely works on other versions)
+- ffmpeg (optional, required for GIF conversion and audio stripping)
+
+#### Setup
+
+1. Get a [Google Gemini API key](https://aistudio.google.com/apikey)
+2. Set the `GEMINI_API_KEY` environment variable
+3. Install dependencies:
+
+```bash
+cd skills/pontasan-genmov/script
+npm install
+```
+
 ## License
 
 ISC

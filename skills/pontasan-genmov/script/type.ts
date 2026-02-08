@@ -33,7 +33,7 @@ export type Spec = {
     filePath?: string,
     prompt?: string,
     imagePath?: string,
-    mode: 'fast' | 'quality',
+    mode: 'fast' | 'quality' | 'ultra',
     mimeType?: string,
     aspectRatio?: string,
     durationSeconds?: number,
@@ -43,6 +43,6 @@ export type Spec = {
 export type AiModel = {
     model: string,
     rpm: number,
-    tpm: number,
-    rpd: number
+    rpd: number,
+    durationSeconds: number[]
 }
